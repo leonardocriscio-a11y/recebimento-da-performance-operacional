@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Curvas de crescimento de empresas de capital aberto</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --wash: #f0efec;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --q0: #86b6ef; --q1: #5598e7; --q2: #2a78d6; --q3: #1c5cab; --q4: #104281; --q5: #0d366b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface-1: #1a1a19;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: #383835;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+      --q0: #184f95; --q1: #256abf; --q2: #3987e5; --q3: #6da7ec; --q4: #9ec5f4; --q5: #cde2fb;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: #383835;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --q0: #184f95; --q1: #256abf; --q2: #3987e5; --q3: #6da7ec; --q4: #9ec5f4; --q5: #cde2fb;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--page); }
+  .viz-root {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.5;
+    padding: 32px 24px 64px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; font-weight: 600; margin: 48px 0 6px; }
+  h3 { font-size: 15px; font-weight: 600; margin: 0; }
+  p { margin: 0 0 10px; }
+  .lede { color: var(--text-secondary); max-width: 860px; font-size: 15px; }
+  .muted { color: var(--text-muted); }
+  .sec { color: var(--text-secondary); }
+  a { color: inherit; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 18px 14px;
+  }
+
+  /* arquétipos */
+  .arche { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-top: 20px; }
+  .arche .card { padding: 16px; }
+  .arche svg { display: block; margin-bottom: 8px; }
+  .arche h3 { margin-bottom: 4px; }
+  .arche p { color: var(--text-secondary); font-size: 13px; margin: 0; }
+  .arche .who { margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+
+  /* controles */
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+  .seg button {
+    font: inherit; font-size: 13px; color: var(--text-secondary);
+    background: transparent; border: 0; padding: 6px 14px; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--text-primary); font-weight: 600; }
+  .seg button:focus-visible { outline: 2px solid var(--s1); outline-offset: -2px; }
+  .hint { font-size: 13px; color: var(--text-muted); }
+
+  /* grade de empresas */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 16px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  .co-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .co-head .key { width: 14px; height: 2px; border-radius: 1px; align-self: center; }
+  .co-head .meta { font-size: 12px; color: var(--text-muted); }
+  .tag { display: inline-block; font-size: 12px; color: var(--text-secondary); background: var(--wash); border-radius: 999px; padding: 1px 10px; margin: 6px 0 2px; }
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px; }
+  .stat .lbl { font-size: 12px; color: var(--text-muted); }
+  .stat .val { font-size: 16px; font-weight: 600; }
+  .co-text { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+  /* tooltip */
+  .tip {
+    position: absolute; pointer-events: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    padding: 8px 10px; font-size: 12px; min-width: 120px; opacity: 0; transition: opacity .08s;
+    white-space: nowrap;
+  }
+  .tip.on { opacity: 1; }
+  .tip .t-h { color: var(--text-muted); margin-bottom: 4px; }
+  .tip .row { display: flex; align-items: center; gap: 8px; }
+  .tip .row .k { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+  .tip .row .v { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .tip .row .n { color: var(--text-secondary); }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .ann { font-size: 11px; fill: var(--text-muted); }
+  .endlbl { font-size: 12px; font-weight: 600; fill: var(--text-primary); paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+
+  /* legenda */
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 10px 0 8px; }
+  .legend button {
+    font: inherit; font-size: 13px; color: var(--text-secondary); background: transparent;
+    border: 1px solid transparent; border-radius: 6px; padding: 2px 8px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .legend button:hover, .legend button:focus-visible { border-color: var(--border); background: var(--wash); outline: none; }
+  .legend .k { width: 14px; height: 2px; border-radius: 1px; }
+
+  /* heatmap legend */
+  .qlegend { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12px; color: var(--text-secondary); margin: 8px 0 4px; }
+  .qlegend span.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -3px; margin-right: 5px; }
+
+  /* tabelas */
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-muted); font-weight: 500; font-size: 12px; }
+  .tbl-wrap { overflow-x: auto; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+  ul.lessons { padding-left: 20px; margin: 8px 0 0; max-width: 900px; }
+  ul.lessons li { margin-bottom: 10px; color: var(--text-secondary); }
+  ul.lessons li strong { color: var(--text-primary); }
+  .foot { font-size: 12px; color: var(--text-muted); margin-top: 40px; max-width: 900px; }
+  .foot li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="wrap">
+
+  <h1>Como crescem as empresas que viraram gigantes na bolsa</h1>
+  <p class="lede">Receita anual (US$) de 8 empresas de capital aberto que cresceram exponencialmente — da abertura de capital (IPO) até o último ano fiscal completo (2025). Receita é a métrica mais limpa para ver a “curva” do negócio: o preço da ação mistura crescimento com humor do mercado.</p>
+
+  <h2>Os 4 formatos de curva que aparecem</h2>
+  <p class="sec">Quase nenhuma empresa cresce numa exponencial perfeita para sempre. O que se vê na prática são variações destes quatro desenhos (esquemas ilustrativos, escala logarítmica):</p>
+  <div class="arche" id="arche"></div>
+
+  <h2>Empresa por empresa</h2>
+  <p class="sec">Cada gráfico mostra a receita anual. A faixa cinza é o período antes do IPO. Passe o mouse para ver o valor e o crescimento de cada ano.</p>
+  <div class="controls" role="group" aria-label="Escala do eixo vertical">
+    <div class="seg" id="scaleSeg">
+      <button type="button" data-scale="linear" aria-pressed="true">Escala linear</button>
+      <button type="button" data-scale="log" aria-pressed="false">Escala logarítmica</button>
+    </div>
+    <span class="hint" id="scaleHint">Na escala linear toda exponencial parece um “taco de hóquei”: plana por anos e de repente vertical.</span>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <h2>Comparando: quantas vezes cada uma cresceu desde o IPO</h2>
+  <p class="sec">Receita indexada ao ano do IPO (= 1×), alinhada por “anos desde o IPO”. Eixo vertical logarítmico — cada linha de grade é 10× a anterior, e uma reta significa taxa de crescimento constante.</p>
+  <div class="card">
+    <div class="legend" id="cmpLegend" aria-label="Legenda — passe o mouse para destacar"></div>
+    <div class="chart" id="cmpChart"></div>
+  </div>
+
+  <h2>A assinatura da curva S: a taxa de crescimento cai com a escala</h2>
+  <p class="sec">Crescimento da receita ano a ano, alinhado por anos desde o IPO. Quanto mais escuro, mais rápido. Repare como quase todas começam escuras e clareiam — exceto NVIDIA e MercadoLibre, que reaceleraram.</p>
+  <div class="card">
+    <div class="qlegend" id="qLegend"></div>
+    <div class="chart" id="heat"></div>
+  </div>
+
+  <h2>Resumo numérico</h2>
+  <div class="card tbl-wrap">
+    <table id="summary"></table>
+    <details>
+      <summary>Ver tabela completa ano a ano (US$ bilhões)</summary>
+      <div class="tbl-wrap" style="margin-top:10px"><table id="full"></table></div>
+    </details>
+  </div>
+
+  <h2>O que essas curvas ensinam</h2>
+  <ul class="lessons">
+    <li><strong>Exponencial “pura” é rara e dura pouco.</strong> O normal é uma curva S: hipercrescimento (50–100%+ ao ano) por 3–8 anos, depois a taxa cai para 15–30% e, por fim, para o ritmo do mercado. Tesla é o exemplo mais nítido de topo do “S”.</li>
+    <li><strong>As gigantes duradouras empilham várias curvas S.</strong> Amazon (varejo → marketplace → AWS → anúncios), Netflix (DVD → streaming → anúncios) e MercadoLibre (marketplace → Mercado Pago → crédito/logística) mantêm a curva subindo porque abrem um novo motor antes do anterior saturar.</li>
+    <li><strong>O crescimento pode chegar tarde e em degrau.</strong> A NVIDIA passou ~15 anos entre US$ 3 e 5 bi de receita; a IA fez a receita multiplicar 8× em 3 anos. Curvas não são destino: um novo mercado pode destravar tudo.</li>
+    <li><strong>Taxa alta sobre base pequena ≠ taxa alta sobre base grande.</strong> Amazon “só” cresceu 12% em 2025, mas isso adicionou ~US$ 79 bi de receita em um ano — quase 5× a receita anual inteira do Nubank. Em escala, crescimento absoluto importa tanto quanto o percentual.</li>
+    <li><strong>Leia sempre em escala logarítmica.</strong> No linear, os primeiros anos (justamente os de maior taxa de crescimento) somem. No log, a inclinação é a taxa: reta = ritmo constante; curva que entorta para baixo = desaceleração.</li>
+  </ul>
+
+  <div class="foot">
+    <p><strong>Notas e fontes.</strong> Receita líquida total anual em US$ bilhões nominais, conforme reportada pelas empresas (10-K/20-F/6-K e releases de resultado); valores arredondados. NVIDIA usa ano fiscal, que termina no fim de janeiro (ex.: FY2026 = fev/2025–jan/2026). Nubank: receita em IFRS convertida para US$ (variação cambial do real afeta a série). Alphabet antes de 2015 = Google. Números de 2025 confirmados nos releases de resultado publicados entre jan e mar/2026:</p>
+    <ul>
+      <li><a href="https://www.sec.gov/Archives/edgar/data/1045810/000104581026000019/q4fy26pr.htm">NVIDIA — resultados do 4º tri e ano fiscal 2026 (8-K)</a></li>
+      <li><a href="https://www.businesswire.com/news/home/20260224245400/en/MercadoLibre-Inc.-Reports-Fourth-Quarter-and-Full-Year-2025-Financial-Results">MercadoLibre — resultados de 2025</a></li>
+      <li><a href="https://www.businesswire.com/news/home/20260225967630/en/Nu-Holdings-Ltd.-Reports-Fourth-Quarter-and-Full-Year-2025-Financial-Results">Nu Holdings — resultados de 2025</a> · <a href="https://www.sec.gov/Archives/edgar/data/1691493/000119312521347503/d213207df1a.htm">F-1 (2019–2020)</a></li>
+      <li><a href="https://mercomindia.com/teslas-q4-2025-revenue-falls-3-while-energy-generation-and-storage-revenue-rises-25">Tesla — resultados de 2025</a></li>
+      <li><a href="https://www.verdict.co.uk/alphabet-q4-2025-results/">Alphabet — resultados de 2025</a> · <a href="https://www.homeaccentstoday.com/retailers/amazon-ends-2025-with-double-digit-growth-plans-major-capital-spend-in-26">Amazon — 2025</a> · <a href="https://www.advanced-television.com/2026/01/21/netflix-2025-revenue-at-45-2bn/">Netflix — 2025</a></li>
+    </ul>
+    <p>Séries históricas anteriores a 2025: relatórios anuais das próprias empresas. Este material é educativo e não é recomendação de investimento.</p>
+  </div>
+
+</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Dados: receita anual, US$ bilhões ----------
+  // ipo = ano (fiscal) do IPO, usado como base do índice
+  const COMPANIES = [
+    { id: "amzn", name: "Amazon", ticker: "AMZN", ipo: 1997, color: "--s1",
+      pattern: "Exponencial longa, sem nenhum ano de queda",
+      text: "28 anos seguidos de crescimento. No log a curva é quase uma reta que entorta devagar: a taxa caiu de 100%+ nos anos 90 para ~10–20% hoje, mas sobre uma base gigantesca. Várias curvas S empilhadas: e-commerce → marketplace → AWS → anúncios.",
+      data: {1996:0.0157,1997:0.148,1998:0.610,1999:1.640,2000:2.762,2001:3.122,2002:3.933,2003:5.264,2004:6.921,2005:8.490,2006:10.711,2007:14.835,2008:19.166,2009:24.509,2010:34.204,2011:48.077,2012:61.093,2013:74.452,2014:88.988,2015:107.006,2016:135.987,2017:177.866,2018:232.887,2019:280.522,2020:386.064,2021:469.822,2022:513.983,2023:574.785,2024:637.959,2025:716.9} },
+    { id: "nflx", name: "Netflix", ticker: "NFLX", ipo: 2002, color: "--s2",
+      pattern: "Composição constante por duas décadas",
+      text: "Média de ~28% ao ano por 23 anos — no gráfico log é praticamente uma reta. Duas reinvenções no caminho: DVD por correio → streaming (2007–2011) → estúdio global com plano de anúncios.",
+      data: {2002:0.153,2003:0.272,2004:0.506,2005:0.682,2006:0.997,2007:1.205,2008:1.365,2009:1.670,2010:2.163,2011:3.205,2012:3.609,2013:4.375,2014:5.505,2015:6.780,2016:8.831,2017:11.693,2018:15.794,2019:20.156,2020:24.996,2021:29.698,2022:31.616,2023:33.723,2024:39.001,2025:45.2} },
+    { id: "goog", name: "Alphabet (Google)", ticker: "GOOGL", ipo: 2004, color: "--s3",
+      pattern: "Explosão inicial e curva S suave",
+      text: "Já era lucrativa no IPO e crescia 70–90% ao ano até 2006; depois a taxa assentou em 15–25%. A curva no log “dobra” cedo: a busca amadureceu e o crescimento passou a vir de YouTube e Cloud. Passou de US$ 400 bi em 2025.",
+      data: {2001:0.086,2002:0.440,2003:1.466,2004:3.189,2005:6.139,2006:10.605,2007:16.594,2008:21.796,2009:23.651,2010:29.321,2011:37.905,2012:46.039,2013:55.519,2014:66.001,2015:74.989,2016:90.272,2017:110.855,2018:136.819,2019:161.857,2020:182.527,2021:257.637,2022:282.836,2023:307.394,2024:350.018,2025:402.8} },
+    { id: "meli", name: "MercadoLibre", ticker: "MELI", ipo: 2007, color: "--s4",
+      pattern: "Aceleração tardia (novos motores)",
+      text: "Cresceu ~25% ao ano por uma década; a curva ficou mais íngreme depois de 2019, quando Mercado Pago (crédito) e logística própria viraram novos motores. Rara curva que acelera após 12 anos de bolsa.",
+      data: {2007:0.0855,2008:0.1374,2009:0.1727,2010:0.2169,2011:0.2989,2012:0.3736,2013:0.4726,2014:0.5565,2015:0.6518,2016:0.8444,2017:1.2169,2018:1.4398,2019:2.2964,2020:3.9733,2021:7.0694,2022:10.537,2023:14.473,2024:20.777,2025:28.893} },
+    { id: "nu", name: "Nubank (Nu Holdings)", ticker: "NU", ipo: 2021, color: "--s5",
+      pattern: "Hipercrescimento recente",
+      text: "De US$ 0,6 bi (2019) para US$ 16,3 bi (2025): ~27× em 6 anos. Ainda está na parte íngreme do “S”, crescendo 40%+ ao ano com expansão para México e Colômbia. Série em US$ sofre com o câmbio do real.",
+      data: {2019:0.612,2020:0.737,2021:1.698,2022:4.792,2023:8.029,2024:11.517,2025:16.3} },
+    { id: "nvda", name: "NVIDIA", ticker: "NVDA", ipo: 2000, color: "--s6", fiscal: true,
+      pattern: "Platô longo + degrau",
+      text: "Por ~15 anos a receita ficou entre US$ 3 e 5 bi (curva achatada, com quedas). Com a IA, saltou de US$ 27 bi (FY23) para US$ 216 bi (FY26): 8× em 3 anos. Crescimento exponencial pode chegar tarde — e em degrau.",
+      data: {2000:0.374,2001:0.735,2002:1.369,2003:1.909,2004:1.823,2005:2.010,2006:2.376,2007:3.069,2008:4.098,2009:3.425,2010:3.326,2011:3.543,2012:3.998,2013:4.280,2014:4.130,2015:4.682,2016:5.010,2017:6.910,2018:9.714,2019:11.716,2020:10.918,2021:16.675,2022:26.914,2023:26.974,2024:60.922,2025:130.497,2026:215.938} },
+    { id: "meta", name: "Meta (Facebook)", ticker: "META", ipo: 2012, color: "--s7",
+      pattern: "Hipercrescimento com tropeço",
+      text: "Cresceu 45–58% ao ano de 2013 a 2017 (virada para o mobile). Primeira queda em 2022 (−1%, após as mudanças de privacidade da Apple) e retomada de 22% em 2025 com IA nos anúncios — chegou a US$ 201 bi.",
+      data: {2009:0.777,2010:1.974,2011:3.711,2012:5.089,2013:7.872,2014:12.466,2015:17.928,2016:27.638,2017:40.653,2018:55.838,2019:70.697,2020:85.965,2021:117.929,2022:116.609,2023:134.902,2024:164.501,2025:200.97} },
+    { id: "tsla", name: "Tesla", ticker: "TSLA", ipo: 2010, color: "--s8",
+      pattern: "Curva S clássica (chegou ao platô)",
+      text: "De US$ 117 mi no IPO para US$ 97 bi em 2023 (~840×). Desde então estagnou e caiu 3% em 2025 — o topo do “S” quando o mercado-alvo amadurece e a concorrência (sobretudo chinesa) chega.",
+      data: {2008:0.0147,2009:0.1119,2010:0.1167,2011:0.2044,2012:0.4132,2013:2.0134,2014:3.1980,2015:4.0461,2016:7.0003,2017:11.759,2018:21.461,2019:24.578,2020:31.536,2021:53.823,2022:81.462,2023:96.773,2024:97.690,2025:94.827} }
+  ];
+
+  COMPANIES.forEach(c => {
+    c.series = Object.keys(c.data).map(Number).sort((a, b) => a - b).map(y => ({ x: y, v: c.data[y] }));
+    c.series.forEach((p, i) => { p.g = i ? p.v / c.series[i - 1].v - 1 : null; });
+    c.base = c.data[c.ipo];
+    c.last = c.series[c.series.length - 1];
+    c.years = c.last.x - c.ipo;
+    c.mult = c.last.v / c.base;
+    c.cagr = Math.pow(c.mult, 1 / c.years) - 1;
+  });
+
+  // ---------- utilidades ----------
+  const NS = "http://www.w3.org/2000/svg";
+  const css = n => getComputedStyle(document.querySelector(".viz-root")).getPropertyValue(n).trim();
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function txt(parent, x, y, s, cls, anchor) {
+    const t = el("text", { x, y, class: cls || "tick", "text-anchor": anchor || "start" }, parent);
+    t.textContent = s;
+    return t;
+  }
+  const nf = (v, d) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: 0 });
+  function money(v) {
+    if (v >= 1) return "US$ " + nf(v, v >= 100 ? 0 : 1) + " bi";
+    return "US$ " + nf(v * 1000, v * 1000 >= 10 ? 0 : 1) + " mi";
+  }
+  function moneyTick(v) {
+    if (v === 0) return "0";
+    if (v >= 1) return nf(v, 2) + " bi";
+    return nf(v * 1000, 1) + " mi";
+  }
+  const pct = g => (g >= 0 ? "+" : "−") + nf(Math.abs(g * 100), Math.abs(g) < 0.1 ? 1 : 0) + "%";
+  const mult = m => nf(m, m >= 100 ? 0 : 1) + "×";
+  const yrLabel = (c, y) => c.fiscal ? "FY" + y : String(y);
+
+  function niceStep(span, n) {
+    const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  function logTicks(min, max) {
+    const lo = Math.floor(Math.log10(min)), hi = Math.ceil(Math.log10(max));
+    const mults = (hi - lo) <= 2 ? [1, 2, 5] : (hi - lo) <= 3 ? [1, 3] : [1];
+    const out = [];
+    for (let e = lo; e <= hi; e++) mults.forEach(m => { const v = m * Math.pow(10, e); if (v >= min * 0.999 && v <= max * 1.001) out.push(v); });
+    return out;
+  }
+
+  function makeTip(container) {
+    const t = document.createElement("div");
+    t.className = "tip";
+    t.setAttribute("role", "status");
+    container.appendChild(t);
+    return t;
+  }
+  function placeTip(tip, container, px, py) {
+    const cw = container.clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = px + 14;
+    if (left + tw > cw) left = px - tw - 14;
+    let top = Math.max(0, py - th / 2);
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  function tipRow(tip, colorVar, value, name) {
+    const r = document.createElement("div"); r.className = "row";
+    const k = document.createElement("span"); k.className = "k"; k.style.background = "var(" + colorVar + ")";
+    const v = document.createElement("span"); v.className = "v"; v.textContent = value;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = name;
+    r.append(k, v, n); tip.appendChild(r);
+  }
+
+  // ---------- esquemas dos arquétipos ----------
+  const ARCH = [
+    { t: "Exponencial sustentada", d: "Taxa de crescimento quase constante por décadas. No log vira uma reta.", who: "Amazon, Netflix",
+      f: x => x },
+    { t: "Curva S (logística)", d: "Hipercrescimento no começo, depois a taxa cai e a curva achata quando o mercado satura.", who: "Alphabet, Meta, Tesla",
+      f: x => 1 / (1 + Math.exp(-9 * (x - 0.35))) },
+    { t: "Platô + degrau", d: "Anos de crescimento lento até um novo mercado destravar uma explosão.", who: "NVIDIA",
+      f: x => x < 0.62 ? 0.12 + x * 0.22 : 0.12 + 0.62 * 0.22 + Math.pow((x - 0.62) / 0.38, 1.6) * 0.74 },
+    { t: "Reaceleração / curvas empilhadas", d: "Um novo motor de receita entra antes do anterior saturar e a curva volta a empinar.", who: "MercadoLibre, Nubank",
+      f: x => x < 0.55 ? x * 0.75 : 0.55 * 0.75 + (x - 0.55) * 1.3 }
+  ];
+  (function drawArch() {
+    const host = document.getElementById("arche");
+    ARCH.forEach((a, i) => {
+      const card = document.createElement("div"); card.className = "card";
+      const W = 220, H = 70;
+      const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, "aria-hidden": "true" });
+      el("line", { x1: 0, x2: W, y1: H - 1, y2: H - 1, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+      let d = "";
+      for (let k = 0; k <= 60; k++) {
+        const x = k / 60, y = Math.min(1, Math.max(0, a.f(x)));
+        d += (k ? "L" : "M") + (x * (W - 8) + 4).toFixed(1) + "," + (H - 6 - y * (H - 14)).toFixed(1);
+      }
+      el("path", { d, fill: "none", stroke: "var(--text-secondary)", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }, svg);
+      card.appendChild(svg);
+      const h = document.createElement("h3"); h.textContent = (i + 1) + ". " + a.t;
+      const p = document.createElement("p"); p.textContent = a.d;
+      const w = document.createElement("div"); w.className = "who"; w.textContent = "Exemplos: " + a.who;
+      card.append(h, p, w);
+      host.appendChild(card);
+    });
+  })();
+
+  // ---------- small multiples ----------
+  let SCALE = "linear";
+  const cards = [];
+  (function buildGrid() {
+    const host = document.getElementById("grid");
+    COMPANIES.forEach(c => {
+      const card = document.createElement("article"); card.className = "card";
+      const head = document.createElement("div"); head.className = "co-head";
+      const key = document.createElement("span"); key.className = "key"; key.style.background = "var(" + c.color + ")";
+      const h = document.createElement("h3"); h.textContent = c.name;
+      const meta = document.createElement("span"); meta.className = "meta";
+      meta.textContent = c.ticker + " · IPO " + (c.id === "nvda" ? "1999" : c.ipo) + (c.fiscal ? " · ano fiscal" : "");
+      head.append(key, h, meta);
+      const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = c.pattern;
+      const chart = document.createElement("div"); chart.className = "chart";
+      chart.setAttribute("role", "img");
+      chart.setAttribute("aria-label", `Receita anual de ${c.name}: de ${money(c.series[0].v)} em ${yrLabel(c, c.series[0].x)} para ${money(c.last.v)} em ${yrLabel(c, c.last.x)}.`);
+      const stats = document.createElement("div"); stats.className = "stats";
+      [["Receita no IPO → " + yrLabel(c, c.last.x), money(c.base) + " → " + money(c.last.v)],
+       ["Multiplicou", mult(c.mult) + " em " + c.years + " anos"],
+       ["Crescimento médio (CAGR)", nf(c.cagr * 100, 0) + "% ao ano"]].forEach(([l, v]) => {
+        const s = document.createElement("div"); s.className = "stat";
+        const a = document.createElement("div"); a.className = "lbl"; a.textContent = l;
+        const b = document.createElement("div"); b.className = "val"; b.textContent = v;
+        if (v.length > 18) b.style.fontSize = "14px";
+        s.append(a, b); stats.appendChild(s);
+      });
+      const p = document.createElement("p"); p.className = "co-text"; p.textContent = c.text;
+      card.append(head, tag, chart, stats, p);
+      host.appendChild(card);
+      cards.push({ c, chart });
+    });
+  })();
+
+  function drawCompany(c, host) {
+    host.innerHTML = "";
+    const W = Math.max(280, host.clientWidth), H = 220;
+    const m = { l: 52, r: 74, t: 14, b: 26 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const xs = c.series.map(p => p.x), x0 = xs[0], x1 = xs[xs.length - 1];
+    const X = x => m.l + (x - x0) / (x1 - x0) * iw;
+    const vmax = Math.max(...c.series.map(p => p.v)), vmin = Math.min(...c.series.map(p => p.v));
+    let Y, ticks;
+    if (SCALE === "log") {
+      const lo = Math.pow(10, Math.floor(Math.log10(vmin))), hi = Math.pow(10, Math.ceil(Math.log10(vmax)));
+      Y = v => m.t + ih - (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) * ih;
+      ticks = logTicks(lo, hi);
+    } else {
+      const step = niceStep(vmax, 4), top = Math.ceil(vmax / step) * step;
+      Y = v => m.t + ih - v / top * ih;
+      ticks = []; for (let v = 0; v <= top + 1e-9; v += step) ticks.push(+v.toFixed(6));
+    }
+    const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+
+    // pré-IPO
+    if (x0 < c.ipo) {
+      const xa = X(x0) - 4, xb = (X(c.ipo) + X(c.ipo - 1)) / 2;
+      el("rect", { x: xa, y: m.t, width: xb - xa, height: ih, fill: "var(--wash)", opacity: 0.7, rx: 3 }, svg);
+      txt(svg, xa + 4, m.t + 12, "pré-IPO", "ann");
+    }
+    // grade
+    ticks.forEach(v => {
+      el("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, svg);
+      txt(svg, m.l - 8, Y(v) + 4, moneyTick(v), "tick", "end");
+    });
+    if (SCALE === "log") el("line", { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: "var(--axis)", "stroke-width": 1 }, svg);
+    // eixo x
+    const span = x1 - x0, xstep = span > 20 ? 5 : span > 10 ? 3 : span > 5 ? 2 : 1;
+    for (let y = Math.ceil(x0 / xstep) * xstep; y <= x1; y += xstep) {
+      txt(svg, X(y), H - 6, c.fiscal ? "FY" + String(y).slice(2) : String(y), "tick", "middle");
+    }
+    // linha
+    const col = "var(" + c.color + ")";
+    const d = c.series.map((p, i) => (i ? "L" : "M") + X(p.x).toFixed(1) + "," + Y(p.v).toFixed(1)).join("");
+    if (SCALE === "linear") {
+      el("path", { d: d + `L${X(x1)},${m.t + ih}L${X(x0)},${m.t + ih}Z`, fill: col, opacity: 0.1 }, svg);
+    }
+    el("path", { d, fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    // ponto do IPO e ponto final
+    const ipoP = c.series.find(p => p.x === c.ipo);
+    el("circle", { cx: X(ipoP.x), cy: Y(ipoP.v), r: 4, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+    const ipoLbl = txt(svg, X(ipoP.x) + 7, Y(ipoP.v) - 7, "IPO", "ann");
+    if (SCALE === "linear") ipoLbl.setAttribute("y", Y(ipoP.v) - 9);
+    el("circle", { cx: X(c.last.x), cy: Y(c.last.v), r: 4.5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+    txt(svg, X(c.last.x) + 8, Y(c.last.v) + 4, money(c.last.v).replace("US$ ", ""), "endlbl");
+
+    // hover
+    const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 }, svg);
+    const dot = el("circle", { r: 4.5, fill: col, stroke: "var(--surface-1)", "stroke-width": 2, opacity: 0 }, svg);
+    const tip = makeTip(host);
+    const hit = el("rect", { x: m.l - 6, y: m.t, width: iw + 12, height: ih, fill: "transparent", tabindex: 0 }, svg);
+    let idx = c.series.length - 1;
+    function show(i) {
+      idx = Math.max(0, Math.min(c.series.length - 1, i));
+      const p = c.series[idx];
+      cross.setAttribute("x1", X(p.x)); cross.setAttribute("x2", X(p.x)); cross.setAttribute("opacity", 1);
+      dot.setAttribute("cx", X(p.x)); dot.setAttribute("cy", Y(p.v)); dot.setAttribute("opacity", 1);
+      tip.textContent = "";
+      const hh = document.createElement("div"); hh.className = "t-h";
+      hh.textContent = yrLabel(c, p.x) + (p.x < c.ipo ? " · pré-IPO" : "");
+      tip.appendChild(hh);
+      tipRow(tip, c.color, money(p.v), "receita");
+      if (p.g !== null) {
+        const r = document.createElement("div"); r.className = "row";
+        const v = document.createElement("span"); v.className = "v"; v.textContent = pct(p.g);
+        const n = document.createElement("span"); n.className = "n"; n.textContent = "vs. ano anterior";
+        r.append(v, n); tip.appendChild(r);
+      }
+      tip.classList.add("on");
+      placeTip(tip, host, X(p.x), Y(p.v));
+    }
+    function hide() { cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); tip.classList.remove("on"); }
+    hit.addEventListener("pointermove", e => {
+      const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+      const yr = x0 + (px - m.l) / iw * (x1 - x0);
+      let best = 0; c.series.forEach((p, i) => { if (Math.abs(p.x - yr) < Math.abs(c.series[best].x - yr)) best = i; });
+      show(best);
+    });
+    hit.addEventListener("pointerleave", hide);
+    hit.addEventListener("focus", () => show(idx));
+    hit.addEventListener("blur", hide);
+    hit.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") { show(idx - 1); e.preventDefault(); }
+      if (e.key === "ArrowRight") { show(idx + 1); e.preventDefault(); }
+    });
+  }
+
+  // ---------- comparação indexada ----------
+  let focusId = null;
+  function drawCompare() {
+    const host = document.getElementById("cmpChart");
+    host.innerHTML = "";
+    const W = Math.max(320, host.clientWidth), H = 420;
+    const m = { l: 56, r: 110, t: 12, b: 40 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const S = COMPANIES.map(c => ({ c, pts: c.series.filter(p => p.x >= c.ipo).map(p => ({ x: p.x - c.ipo, v: p.v / c.base })) }));
+    const xmax = Math.max(...S.map(s => s.pts[s.pts.length - 1].x));
+    const lo = 0.5, hi = 10000;
+    const X = x => m.l + x / xmax * iw;
+    const Y = v => m.t + ih - (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) * ih;
+    const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+    [1, 10, 100, 1000, 10000].forEach(v => {
+      el("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v), stroke: v === 1 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, svg);
+      txt(svg, m.l - 8, Y(v) + 4, nf(v, 0) + "×", "tick", "end");
+    });
+    for (let x = 0; x <= xmax; x += 5) txt(svg, X(x), H - 20, String(x), "tick", "middle");
+    txt(svg, m.l + iw / 2, H - 4, "anos desde o IPO", "ann", "middle");
+
+    const lines = {};
+    S.forEach(s => {
+      const g = el("g", { "data-id": s.c.id }, svg);
+      const d = s.pts.map((p, i) => (i ? "L" : "M") + X(p.x).toFixed(1) + "," + Y(p.v).toFixed(1)).join("");
+      el("path", { d, fill: "none", stroke: "var(" + s.c.color + ")", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, g);
+      const e = s.pts[s.pts.length - 1];
+      el("circle", { cx: X(e.x), cy: Y(e.v), r: 4, fill: "var(" + s.c.color + ")", stroke: "var(--surface-1)", "stroke-width": 2 }, g);
+      lines[s.c.id] = { g, end: e };
+    });
+    // rótulos finais (nome + múltiplo), com ajuste simples de colisão
+    const labels = S.map(s => ({ id: s.c.id, x: X(s.pts[s.pts.length - 1].x) + 8, y: Y(s.pts[s.pts.length - 1].v) + 4,
+      s: s.c.name.split(" (")[0] + " " + mult(s.c.mult) }));
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) {
+      const a = labels[i - 1], b = labels[i];
+      if (Math.abs(a.x - b.x) < 120 && b.y - a.y < 14) b.y = a.y + 14;
+    }
+    labels.forEach(l => { const t = txt(lines[l.id].g, l.x, l.y, l.s, "endlbl"); t.style.fontSize = "11px"; });
+
+    function applyFocus() {
+      Object.keys(lines).forEach(id => lines[id].g.setAttribute("opacity", !focusId || focusId === id ? 1 : 0.15));
+      if (focusId) svg.appendChild(lines[focusId].g);
+    }
+    applyFocus();
+    host._applyFocus = applyFocus;
+
+    // crosshair
+    const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 }, svg);
+    const tip = makeTip(host);
+    const hit = el("rect", { x: m.l - 6, y: m.t, width: iw + 12, height: ih, fill: "transparent", tabindex: 0 }, svg);
+    let cur = xmax;
+    function show(xi) {
+      cur = Math.max(0, Math.min(xmax, xi));
+      cross.setAttribute("x1", X(cur)); cross.setAttribute("x2", X(cur)); cross.setAttribute("opacity", 1);
+      tip.textContent = "";
+      const hh = document.createElement("div"); hh.className = "t-h"; hh.textContent = cur + (cur === 1 ? " ano" : " anos") + " após o IPO";
+      tip.appendChild(hh);
+      S.map(s => ({ s, p: s.pts.find(p => p.x === cur) })).filter(o => o.p).sort((a, b) => b.p.v - a.p.v)
+        .forEach(o => tipRow(tip, o.s.c.color, mult(o.p.v), o.s.c.name.split(" (")[0] + " · " + yrLabel(o.s.c, o.s.c.ipo + cur)));
+      tip.classList.add("on");
+      placeTip(tip, host, X(cur), m.t + ih / 3);
+    }
+    function hide() { cross.setAttribute("opacity", 0); tip.classList.remove("on"); }
+    hit.addEventListener("pointermove", e => {
+      const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+      show(Math.round((px - m.l) / iw * xmax));
+    });
+    hit.addEventListener("pointerleave", hide);
+    hit.addEventListener("focus", () => show(cur));
+    hit.addEventListener("blur", hide);
+    hit.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") { show(cur - 1); e.preventDefault(); }
+      if (e.key === "ArrowRight") { show(cur + 1); e.preventDefault(); }
+    });
+  }
+  (function legend() {
+    const host = document.getElementById("cmpLegend");
+    COMPANIES.forEach(c => {
+      const b = document.createElement("button"); b.type = "button";
+      const k = document.createElement("span"); k.className = "k"; k.style.background = "var(" + c.color + ")";
+      const s = document.createElement("span"); s.textContent = c.name;
+      b.append(k, s);
+      const on = () => { focusId = c.id; document.getElementById("cmpChart")._applyFocus(); };
+      const off = () => { focusId = null; document.getElementById("cmpChart")._applyFocus(); };
+      b.addEventListener("mouseenter", on); b.addEventListener("focus", on);
+      b.addEventListener("mouseleave", off); b.addEventListener("blur", off);
+      host.appendChild(b);
+    });
+  })();
+
+  // ---------- heatmap de crescimento ----------
+  const BINS = [
+    { lim: 0, lbl: "queda", v: "--q0" },
+    { lim: 0.15, lbl: "0–15%", v: "--q1" },
+    { lim: 0.30, lbl: "15–30%", v: "--q2" },
+    { lim: 0.50, lbl: "30–50%", v: "--q3" },
+    { lim: 1.00, lbl: "50–100%", v: "--q4" },
+    { lim: Infinity, lbl: "acima de 100%", v: "--q5" }
+  ];
+  const binOf = g => BINS.find(b => g < b.lim);
+  (function qLegend() {
+    const host = document.getElementById("qLegend");
+    const l = document.createElement("span"); l.textContent = "Crescimento anual:"; host.appendChild(l);
+    BINS.forEach(b => {
+      const s = document.createElement("span");
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = "var(" + b.v + ")";
+      s.append(sw, document.createTextNode(b.lbl)); host.appendChild(s);
+    });
+  })();
+  function drawHeat() {
+    const host = document.getElementById("heat");
+    host.innerHTML = "";
+    const W = Math.max(320, host.clientWidth);
+    const rows = COMPANIES.map(c => ({ c, cells: c.series.filter(p => p.x > c.ipo).map(p => ({ k: p.x - c.ipo, g: p.g, y: p.x })) }));
+    const kmax = Math.max(...rows.map(r => r.cells.length ? r.cells[r.cells.length - 1].k : 0));
+    const m = { l: 150, r: 8, t: 6, b: 36 };
+    const iw = W - m.l - m.r, cw = iw / kmax, ch = 26;
+    const H = m.t + rows.length * ch + m.b;
+    const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, host);
+    const tip = makeTip(host);
+    rows.forEach((r, ri) => {
+      const y = m.t + ri * ch;
+      txt(svg, m.l - 10, y + ch / 2 + 4, r.c.name, "tick", "end").style.fill = "var(--text-secondary)";
+      r.cells.forEach(cell => {
+        const x = m.l + (cell.k - 1) * cw;
+        const rect = el("rect", { x: x + 1, y: y + 1, width: Math.max(1, cw - 2), height: ch - 2, rx: 3,
+          fill: "var(" + binOf(cell.g).v + ")", tabindex: 0 }, svg);
+        const show = () => {
+          rect.setAttribute("stroke", "var(--text-primary)"); rect.setAttribute("stroke-width", 1.5);
+          tip.textContent = "";
+          const hh = document.createElement("div"); hh.className = "t-h";
+          hh.textContent = r.c.name.split(" (")[0] + " · " + yrLabel(r.c, cell.y) + " · ano " + cell.k + " após IPO";
+          tip.appendChild(hh);
+          const row = document.createElement("div"); row.className = "row";
+          const v = document.createElement("span"); v.className = "v"; v.textContent = pct(cell.g);
+          const n = document.createElement("span"); n.className = "n"; n.textContent = "crescimento da receita";
+          row.append(v, n); tip.appendChild(row);
+          tip.classList.add("on");
+          placeTip(tip, host, x + cw, y + ch / 2);
+        };
+        const hide = () => { rect.removeAttribute("stroke"); tip.classList.remove("on"); };
+        rect.addEventListener("pointerenter", show); rect.addEventListener("focus", show);
+        rect.addEventListener("pointerleave", hide); rect.addEventListener("blur", hide);
+      });
+    });
+    for (let k = 1; k <= kmax; k++) {
+      if (k === 1 || k % 5 === 0) txt(svg, m.l + (k - 0.5) * cw, H - 14, String(k), "tick", "middle");
+    }
+    txt(svg, m.l + iw / 2, H - 4, "anos desde o IPO", "ann", "middle");
+  }
+
+  // ---------- tabelas ----------
+  (function tables() {
+    const sum = document.getElementById("summary");
+    const hdr = ["Empresa", "Ano do IPO", "Receita no IPO", "Receita mais recente", "Multiplicou", "CAGR desde o IPO", "Melhor ano", "Último ano"];
+    const trh = document.createElement("tr");
+    hdr.forEach(h => { const th = document.createElement("th"); th.textContent = h; trh.appendChild(th); });
+    const thead = document.createElement("thead"); thead.appendChild(trh); sum.appendChild(thead);
+    const tb = document.createElement("tbody");
+    [...COMPANIES].sort((a, b) => b.cagr - a.cagr).forEach(c => {
+      const post = c.series.filter(p => p.x > c.ipo);
+      const best = post.reduce((a, b) => b.g > a.g ? b : a);
+      const cells = [c.name, c.id === "nvda" ? "1999 (FY2000)" : String(c.ipo), money(c.base) + " (" + yrLabel(c, c.ipo) + ")",
+        money(c.last.v) + " (" + yrLabel(c, c.last.x) + ")", mult(c.mult), nf(c.cagr * 100, 0) + "% a.a.",
+        pct(best.g) + " (" + yrLabel(c, best.x) + ")", pct(c.last.g)];
+      const tr = document.createElement("tr");
+      cells.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    sum.appendChild(tb);
+
+    const full = document.getElementById("full");
+    const years = []; for (let y = 1996; y <= 2026; y++) years.push(y);
+    const tr0 = document.createElement("tr");
+    ["Ano"].concat(COMPANIES.map(c => c.name.split(" (")[0] + (c.fiscal ? " (FY)" : ""))).forEach(h => {
+      const th = document.createElement("th"); th.textContent = h; tr0.appendChild(th);
+    });
+    const th2 = document.createElement("thead"); th2.appendChild(tr0); full.appendChild(th2);
+    const tb2 = document.createElement("tbody");
+    years.forEach(y => {
+      const tr = document.createElement("tr");
+      const td0 = document.createElement("td"); td0.textContent = y; tr.appendChild(td0);
+      COMPANIES.forEach(c => {
+        const td = document.createElement("td");
+        const v = c.data[y];
+        td.textContent = v === undefined ? "—" : nf(v, v < 1 ? 3 : 1);
+        tr.appendChild(td);
+      });
+      tb2.appendChild(tr);
+    });
+    full.appendChild(tb2);
+  })();
+
+  // ---------- render ----------
+  function renderAll() {
+    cards.forEach(({ c, chart }) => drawCompany(c, chart));
+    drawCompare();
+    drawHeat();
+  }
+  document.querySelectorAll("#scaleSeg button").forEach(b => b.addEventListener("click", () => {
+    SCALE = b.dataset.scale;
+    document.querySelectorAll("#scaleSeg button").forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+    document.getElementById("scaleHint").textContent = SCALE === "log"
+      ? "No log, cada linha de grade é 10× a anterior: reta = taxa de crescimento constante; curva que entorta para baixo = desaceleração."
+      : "Na escala linear toda exponencial parece um “taco de hóquei”: plana por anos e de repente vertical.";
+    cards.forEach(({ c, chart }) => drawCompany(c, chart));
+  }));
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
+  renderAll();
+})();
+</script>
+</body>
+</html>
